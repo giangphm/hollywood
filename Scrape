@@ -1,0 +1,127 @@
+import pandas as pd
+from bs4 import BeautifulSoup
+import requests
+from time import sleep
+from random import randint
+import csv
+
+# Lists to store the scraped data in
+names = []
+years = []
+imdb_ratings = []
+votes = []
+movie_tags = []
+mega_list = []
+gross = []
+directors = []
+genres = []
+
+url = "https://www.imdb.com/search/title/?title_type=feature&release_date=1930-01-01,1960-12-31&sort=boxoffice_gross_us,desc&count=250&start=251&ref_=adv_nxt"
+response = requests.get(url)
+soup = BeautifulSoup(response.text, 'html.parser')
+sleep(randint(1, 3))
+
+movie_containers = soup.find_all('div', class_='lister-item mode-advanced')
+# Extract data from individual movie container
+for container in movie_containers:
+    # The name
+    name = container.h3.a.text
+    names.append(name)
+    # The year
+    year = container.h3.find('span', class_='lister-item-year').text
+    years.append(year)
+    # The IMDB rating
+    imdb = float(container.strong.text)
+    imdb_ratings.append(imdb)
+    # The number of votes
+    vote = container.find('span', attrs={'name': 'nv'})['data-value']
+    votes.append(int(vote))
+    # Gross
+    gross_vote = container.find_all('span', attrs={'name': 'nv'})
+    gross.append(gross_vote[1]['data-value'])
+    # Movie IDs
+    movie_tags = soup.find_all('a', attrs={'class': None})
+    movie_tags = [tag.attrs['href'] for tag in movie_tags
+                  if tag.attrs['href'].startswith('/title') & tag.attrs['href'].endswith('/')]
+    # remove duplicate links
+    movie_tags = list(dict.fromkeys(movie_tags))
+    # Director
+    director = container.find('p', class_='').find('a').text
+    directors.append(director)
+    # Genre
+    genre = container.find('span', class_='genre').text.strip("\n")
+    genres.append(genre)
+
+# cast links
+base_url = "https://www.imdb.com"
+
+for tag in movie_tags:
+    cast_list = []
+    r = requests.get(base_url + tag + 'fullcredits?ref_=tt_cl_sm#cast')
+    soupcast = BeautifulSoup(r.text, features='html.parser')
+
+    # identifying the location of actor's names through layers of tags
+    count = 0
+    cast = soupcast.find_all('table', class_="cast_list")
+    for tr in cast:
+        actor_list = tr.find_all('tr')
+        for td in actor_list:
+            actor = td.find_all('td', class_=None)
+            for actor_name in actor:
+                count += 1
+                if count > 6:
+                    break
+                else:
+                    cast_list.append(actor_name.text.strip())
+    mega_list.append(cast_list)
+
+df = pd.DataFrame({'movie': names,
+                   'year': years,
+                   'imdb': imdb_ratings,
+                   'votes': votes,
+                   'gross': gross,
+                   'genre': genres,
+                   'movie ID': movie_tags,
+                   'director': directors,
+                   'cast': mega_list})
+print(df.head())
+
+# save the dataframe to a csv file
+df.to_csv('golden_age_raw2.csv', index=False)
+
+# ---------------------------------------
+
+df = pd.read_csv('golden_age_raw2.csv')
+
+# Splitting genre column
+df[['genre1', 'genre2', 'genre3']] = df.genre.str.split(", ", expand=True)
+del df['genre']
+
+# Cleaning and splitting actors
+df['cast'] = df.cast.str.replace("'", "")
+df['cast'] = df.cast.str.replace("[", "")
+df['cast'] = df.cast.str.replace("]", "")
+df['cast'] = df.cast.str.replace('"', "")
+df[['actor1', 'actor2', 'actor3', 'actor4', 'actor5', 'actor6']] = df.cast.str.split(", ", expand=True)
+del df['cast']
+
+# Cleaning year
+df.loc[:, 'year'] = df['year'].str[-5:-1].astype(int)
+
+# Convert gross from string to integer
+df['gross'] = df.gross.str.replace(",", "")
+df.gross = df.gross.astype(int)
+
+# Reordering
+df = df[['movie', 'year', 'imdb', 'votes', 'gross', 'movie ID', 'genre1', 'genre2', 'genre3',
+         'director', 'actor1', 'actor2', 'actor3', 'actor4', 'actor5', 'actor6']]
+
+# Filtering out animation
+df = df[df["genre1"] != "Animation"]
+
+# save the dataframe to a csv file
+df.to_csv('cleaned_golden_age2.csv', index=False)
+
+
+
+

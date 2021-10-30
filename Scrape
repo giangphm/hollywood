@@ -84,7 +84,6 @@ df = pd.DataFrame({'movie': names,
                    'movie ID': movie_tags,
                    'director': directors,
                    'cast': mega_list})
-print(df.head())
 
 # save the dataframe to a csv file
 df.to_csv('golden_age_raw2.csv', index=False)

@@ -1,0 +1,20 @@
+import pandas as pd
+import numpy as np
+
+# edge list
+df = pd.read_csv('cleaned_golden_age.csv')
+
+x = df.melt(id_vars=['movie', 'year', 'imdb', 'votes', 'gross', 'movie ID', 'genre1', 'genre2', 'genre3'],
+            value_name='people')[['movie', 'year', 'imdb', 'votes', 'gross', 'movie ID', 'genre1', 'genre2', 'genre3',
+                                  'people']].sort_values('gross', ascending=False)
+
+# Drop null values where a movie has fewer than 6 actors
+x['people'].replace('', np.nan, inplace=True)
+x.dropna(subset=['people'], inplace=True)
+
+# Get average values
+x['sum_gross'] = x.groupby('people')['gross'].transform('sum')
+
+# save the dataframe to a csv file
+x.to_csv('melted_golden_age.csv', index=False)
+
